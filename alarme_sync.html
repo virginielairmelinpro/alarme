@@ -3,345 +3,384 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Statut Alarme</title>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;600&display=swap" rel="stylesheet">
+<title>Alarme — Siège & IFP</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Mulish:wght@400;600;700&display=swap" rel="stylesheet">
 
-<!-- Firebase SDK -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getDatabase, ref, set, onValue, push } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+  import { getDatabase, ref, set, get, push } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-  // ⚠️ REMPLACEZ CES VALEURS PAR VOTRE CONFIGURATION FIREBASE (voir instructions)
+  // ⚠️ REMPLACEZ CES VALEURS PAR VOTRE CONFIGURATION FIREBASE
   const firebaseConfig = {
-     apiKey: "AIzaSyCx0zhCEiZUrD5v0D_o4TdbXhfxB1kszPI",
-  authDomain: "activation-alarme-441e8.firebaseapp.com",
-  databaseURL: "https://activation-alarme-441e8-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "activation-alarme-441e8",
-  storageBucket: "activation-alarme-441e8.firebasestorage.app",
-  messagingSenderId: "256760910640",
-  appId: "1:256760910640:web:ab85847d76a7c6e3c32ef5"
+    apiKey: "VOTRE_API_KEY",
+    authDomain: "VOTRE_PROJECT.firebaseapp.com",
+    databaseURL: "https://VOTRE_PROJECT-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "VOTRE_PROJECT",
+    storageBucket: "VOTRE_PROJECT.appspot.com",
+    messagingSenderId: "VOTRE_SENDER_ID",
+    appId: "VOTRE_APP_ID"
   };
 
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
 
-  function formatDate(ts) {
+  function formatTime(ts) {
+    if (!ts) return '—';
     const d = new Date(ts);
-    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-      + ' à ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+      + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   }
 
-  function applyStatus(status, ts, site) {
-    const body = document.getElementById('body');
-    const icon = document.getElementById('icon');
-    const label = document.getElementById('statusLabel');
-    const sub = document.getElementById('statusSub');
-    const lastUpdate = document.getElementById('lastUpdate');
-    const lastSite = document.getElementById('lastSite');
+  function updateGlobalStatus(siege, ifp) {
+    const globalEl = document.getElementById('globalStatus');
+    const globalLabel = document.getElementById('globalLabel');
+    const globalSub = document.getElementById('globalSub');
+    const body = document.body;
 
-    body.classList.remove('armed', 'disarmed', 'unknown');
+    const siegeOn = siege && siege.status === 'armed';
+    const ifpOn   = ifp   && ifp.status   === 'armed';
 
-    if (status === 'armed') {
-      body.classList.add('armed');
-      icon.textContent = '🔒';
-      label.textContent = 'ACTIVÉE';
-      sub.textContent = 'Le siège est sécurisé';
-    } else if (status === 'disarmed') {
-      body.classList.add('disarmed');
-      icon.textContent = '🔓';
-      label.textContent = 'NON ACTIVÉE';
-      sub.textContent = 'Alarme non mise — action requise !';
+    body.className = '';
+
+    if (siegeOn && ifpOn) {
+      body.classList.add('all-armed');
+      globalEl.className = 'global-badge all-on';
+      globalLabel.textContent = '✅ TOUT SÉCURISÉ';
+      globalSub.textContent = 'Les deux sites sont protégés';
+    } else if (!siegeOn && !ifpOn) {
+      body.classList.add('all-disarmed');
+      globalEl.className = 'global-badge all-off';
+      globalLabel.textContent = '🔴 AUCUNE ALARME';
+      globalSub.textContent = 'Aucun site n\'est sécurisé !';
     } else {
-      body.classList.add('unknown');
-      icon.textContent = '❓';
-      label.textContent = '—';
-      sub.textContent = 'En attente de mise à jour';
+      body.classList.add('partial');
+      globalEl.className = 'global-badge partial';
+      globalLabel.textContent = '⚠️ PARTIEL';
+      globalSub.textContent = siegeOn
+        ? 'Siège sécurisé — IFP en attente'
+        : 'IFP sécurisé — Siège en attente';
+    }
+  }
+
+  function updateSiteCard(siteId, data) {
+    const card     = document.getElementById('card-'   + siteId);
+    const statusEl = document.getElementById('status-' + siteId);
+    const timeEl   = document.getElementById('time-'   + siteId);
+    const iconEl   = document.getElementById('icon-'   + siteId);
+
+    if (!data) {
+      card.className = 'site-card unknown';
+      statusEl.textContent = 'Inconnu';
+      timeEl.textContent = '—';
+      iconEl.textContent = '❓';
+      return;
     }
 
-    lastUpdate.textContent = ts ? formatDate(ts) : '—';
-    lastSite.textContent = site ? '— ' + site : '';
+    if (data.status === 'armed') {
+      card.className = 'site-card armed';
+      statusEl.textContent = siteId === 'siege' ? 'SIÈGE SÉCURISÉ' : 'IFP SÉCURISÉ';
+      iconEl.textContent = '🔒';
+    } else {
+      card.className = 'site-card disarmed';
+      statusEl.textContent = siteId === 'siege' ? 'SIÈGE NON ACTIVÉ' : 'IFP NON ACTIVÉ';
+      iconEl.textContent = '🔓';
+    }
+    timeEl.textContent = formatTime(data.ts);
   }
 
   function renderHistory(history) {
     const list = document.getElementById('historyList');
     if (!history) {
-      list.innerHTML = '<div class="initial-msg">Aucun historique pour l\'instant.</div>';
+      list.innerHTML = '<div class="no-history">Aucun historique</div>';
       return;
     }
-    const items = Object.values(history).reverse().slice(0, 6);
+    const items = Object.values(history).reverse().slice(0, 8);
     list.innerHTML = items.map(item => `
       <div class="history-item">
-        <span class="${item.status === 'armed' ? 'badge badge-on' : 'badge badge-off'}">
-          ${item.status === 'armed' ? 'ACTIVÉE' : 'NON ACTIVÉE'}
-        </span>
-        <span class="site-tag">${item.site || ''}</span>
-        <span class="time">${formatDate(item.ts)}</span>
+        <span class="h-badge">${item.status === 'armed' ? '🔒' : '🔓'}</span>
+        <span class="h-site">${item.site || '—'}</span>
+        <span class="h-status ${item.status === 'armed' ? 'h-on' : 'h-off'}">${item.status === 'armed' ? 'Activée' : 'Non activée'}</span>
+        <span class="h-time">${formatTime(item.ts)}</span>
       </div>
     `).join('');
   }
 
-  // Écoute en temps réel le statut
-  const statusRef = ref(db, 'alarme/status');
-  onValue(statusRef, (snapshot) => {
-    const data = snapshot.val();
-    if (data) {
-      applyStatus(data.status, data.ts, data.site);
+  // ✅ LECTURE UNIQUE à la demande — pas de requête en boucle
+  window.checkStatus = async function() {
+    const btn = document.getElementById('btnCheck');
+    const lastCheck = document.getElementById('lastCheck');
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Vérification...';
+
+    try {
+      const [siegeSnap, ifpSnap, histSnap] = await Promise.all([
+        get(ref(db, 'alarme/siege')),
+        get(ref(db, 'alarme/ifp')),
+        get(ref(db, 'alarme/history'))
+      ]);
+
+      const siegeData = siegeSnap.val();
+      const ifpData   = ifpSnap.val();
+
+      updateSiteCard('siege', siegeData);
+      updateSiteCard('ifp',   ifpData);
+      updateGlobalStatus(siegeData, ifpData);
+      renderHistory(histSnap.val());
+
+      // Afficher la section résultat
+      document.getElementById('statusSection').style.display = 'block';
+      lastCheck.textContent = 'Dernière vérification : ' + formatTime(Date.now());
+
+    } catch(e) {
+      alert('Erreur de connexion. Vérifiez votre internet.');
     }
-  });
 
-  // Écoute en temps réel l'historique
-  const historyRef = ref(db, 'alarme/history');
-  onValue(historyRef, (snapshot) => {
-    renderHistory(snapshot.val());
-  });
+    btn.disabled = false;
+    btn.textContent = '🔍 Vérifier le statut maintenant';
+  };
 
-  // Exposer setStatus globalement
-  window.setStatus = function(status) {
-    const site = document.getElementById('siteSelect').value;
-    const ts = Date.now();
-    const data = { status, ts, site };
+  // ✅ Enregistrement du statut (écriture uniquement)
+  window.setStatus = async function(status) {
+    const site    = document.getElementById('siteSelect').value;
+    const siteKey = site === 'Siège' ? 'siege' : 'ifp';
+    const ts      = Date.now();
+    const data    = { status, ts, site };
 
-    // Mise à jour du statut principal
-    set(ref(db, 'alarme/status'), data);
+    const btn = status === 'armed'
+      ? document.getElementById('btnArm')
+      : document.getElementById('btnDisarm');
 
-    // Ajout dans l'historique
-    push(ref(db, 'alarme/history'), data);
+    btn.disabled = true;
+    btn.textContent = '⏳ Enregistrement...';
+
+    try {
+      await Promise.all([
+        set(ref(db, 'alarme/' + siteKey), data),
+        push(ref(db, 'alarme/history'), data)
+      ]);
+      btn.textContent = status === 'armed' ? '✅ Alarme enregistrée !' : '✅ Statut enregistré !';
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = status === 'armed' ? '🔒 Alarme Activée' : '🔓 Alarme Non Activée';
+      }, 2000);
+    } catch(e) {
+      alert('Erreur lors de l\'enregistrement. Vérifiez votre internet.');
+      btn.disabled = false;
+      btn.textContent = status === 'armed' ? '🔒 Alarme Activée' : '🔓 Alarme Non Activée';
+    }
   };
 </script>
 
 <style>
   :root {
-    --on-bg: #071a07;
-    --on-accent: #00ff6a;
-    --on-glow: rgba(0,255,106,0.3);
-    --off-bg: #1a0707;
-    --off-accent: #ff4040;
-    --off-glow: rgba(255,64,64,0.3);
-    --neutral-bg: #0d0d0d;
-    --text: #f0f0f0;
-    --subtext: #666;
-    --card: rgba(255,255,255,0.04);
+    --bg: #0f0f13;
+    --card-bg: #17171e;
     --border: rgba(255,255,255,0.07);
+    --text: #f0f0f0;
+    --muted: #555;
+    --armed: #00e676;
+    --armed-bg: rgba(0,230,118,0.08);
+    --armed-border: rgba(0,230,118,0.25);
+    --disarmed: #ff5252;
+    --disarmed-bg: rgba(255,82,82,0.08);
+    --disarmed-border: rgba(255,82,82,0.25);
+    --warn: #ffab00;
+    --warn-bg: rgba(255,171,0,0.08);
+    --warn-border: rgba(255,171,0,0.25);
+    --blue: #448aff;
+    --blue-bg: rgba(68,138,255,0.1);
+    --blue-border: rgba(68,138,255,0.3);
   }
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  * { margin:0; padding:0; box-sizing:border-box; }
 
   body {
-    font-family: 'DM Sans', sans-serif;
-    background: var(--neutral-bg);
+    font-family: 'Mulish', sans-serif;
+    background: var(--bg);
     color: var(--text);
     min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    padding: 28px 20px 40px;
-    transition: background 0.7s ease;
+    padding: 24px 16px 48px;
+    transition: background 0.5s ease;
   }
-
-  body.armed   { background: var(--on-bg); }
-  body.disarmed { background: var(--off-bg); }
+  body.all-armed    { background: #080f09; }
+  body.all-disarmed { background: #0f0808; }
+  body.partial      { background: #0d0c07; }
 
   /* HEADER */
   .header { text-align: center; margin-bottom: 28px; }
   .header h1 {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(22px, 5vw, 34px);
-    letter-spacing: 5px;
-    color: var(--subtext);
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(18px, 5vw, 28px);
+    font-weight: 800; letter-spacing: 3px; text-transform: uppercase; color: #fff;
   }
-  .header p { font-size: 12px; color: var(--subtext); margin-top: 5px; letter-spacing: 2px; text-transform: uppercase; }
+  .header p { font-size: 12px; color: var(--muted); margin-top: 5px; letter-spacing: 1px; }
 
-  /* LIVE DOT */
-  .live-dot {
-    display: inline-block;
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    background: var(--on-accent);
-    margin-right: 6px;
-    animation: blink 1.5s ease-in-out infinite;
-    vertical-align: middle;
+  /* BOUTON PRINCIPAL DE VÉRIFICATION */
+  .check-wrap { max-width: 500px; margin: 0 auto 20px; }
+
+  #btnCheck {
+    width: 100%; padding: 20px;
+    border-radius: 16px; border: 2px solid var(--blue-border);
+    background: var(--blue-bg); color: var(--blue);
+    font-family: 'Syne', sans-serif; font-size: 17px;
+    font-weight: 800; letter-spacing: 2px; text-transform: uppercase;
+    cursor: pointer; transition: all 0.2s ease;
   }
-  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+  #btnCheck:hover   { background: rgba(68,138,255,0.18); box-shadow: 0 0 30px rgba(68,138,255,0.2); }
+  #btnCheck:active  { transform: scale(0.98); }
+  #btnCheck:disabled { opacity: 0.6; cursor: not-allowed; }
 
-  /* STATUS CARD */
-  .status-card {
-    width: 100%; max-width: 460px;
-    border-radius: 24px;
-    border: 1px solid var(--border);
-    background: var(--card);
-    padding: 44px 28px 36px;
-    text-align: center;
-    backdrop-filter: blur(12px);
-    transition: box-shadow 0.7s ease, border-color 0.7s ease;
-    margin-bottom: 20px;
+  .last-check {
+    text-align: center; font-size: 11px; color: var(--muted);
+    margin-top: 8px; letter-spacing: 1px;
   }
-  body.armed   .status-card { box-shadow: 0 0 70px var(--on-glow);  border-color: rgba(0,255,106,0.25); }
-  body.disarmed .status-card { box-shadow: 0 0 70px var(--off-glow); border-color: rgba(255,64,64,0.25); }
 
-  .status-icon {
-    font-size: 72px; line-height: 1;
-    margin-bottom: 18px; display: block;
+  /* SECTION STATUT (cachée par défaut) */
+  #statusSection { display: none; }
+
+  /* GLOBAL */
+  .global-badge {
+    max-width: 500px; margin: 0 auto 20px;
+    border-radius: 16px; padding: 18px 24px;
+    text-align: center; border: 1px solid var(--border);
     transition: all 0.5s ease;
   }
-  body.armed .status-icon { animation: pulse-glow 2.5s ease-in-out infinite; }
-  @keyframes pulse-glow { 0%,100%{opacity:1} 50%{opacity:0.55} }
+  .global-badge.all-on  { background: var(--armed-bg);    border-color: var(--armed-border);    box-shadow: 0 0 40px rgba(0,230,118,0.12); }
+  .global-badge.all-off { background: var(--disarmed-bg); border-color: var(--disarmed-border); box-shadow: 0 0 40px rgba(255,82,82,0.12); }
+  .global-badge.partial { background: var(--warn-bg);     border-color: var(--warn-border);     box-shadow: 0 0 40px rgba(255,171,0,0.12); }
 
-  .status-label {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(52px, 16vw, 96px);
-    letter-spacing: 4px; line-height: 1;
-    color: var(--subtext);
-    transition: color 0.7s ease;
+  #globalLabel {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(18px, 5vw, 26px); font-weight: 800; letter-spacing: 2px;
   }
-  body.armed   .status-label { color: var(--on-accent); }
-  body.disarmed .status-label { color: var(--off-accent); }
+  .all-on  #globalLabel { color: var(--armed); }
+  .all-off #globalLabel { color: var(--disarmed); }
+  .partial #globalLabel { color: var(--warn); }
+  #globalSub { font-size: 13px; color: var(--muted); margin-top: 4px; }
 
-  .status-sub {
-    font-size: 13px; letter-spacing: 2px;
-    text-transform: uppercase; color: var(--subtext);
-    margin-top: 10px; transition: color 0.7s ease;
+  /* SITE CARDS */
+  .sites-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 12px; max-width: 500px; margin: 0 auto 20px;
   }
-  body.armed   .status-sub { color: rgba(0,255,106,0.6); }
-  body.disarmed .status-sub { color: rgba(255,64,64,0.6); }
+  @media (max-width: 380px) { .sites-grid { grid-template-columns: 1fr; } }
 
-  .timestamp {
-    margin-top: 26px; padding-top: 22px;
-    border-top: 1px solid var(--border);
-    font-size: 12px; color: var(--subtext);
+  .site-card {
+    border-radius: 18px; padding: 20px 14px;
+    text-align: center; border: 1px solid var(--border);
+    background: var(--card-bg); transition: all 0.5s ease;
   }
-  .timestamp span { display: block; font-size: 14px; color: var(--text); margin-top: 4px; font-weight: 600; }
-  .timestamp .site-info { font-size: 12px; color: var(--subtext); margin-top: 2px; }
+  .site-card.armed    { background: var(--armed-bg);    border-color: var(--armed-border);    box-shadow: 0 0 28px rgba(0,230,118,0.1); }
+  .site-card.disarmed { background: var(--disarmed-bg); border-color: var(--disarmed-border); box-shadow: 0 0 28px rgba(255,82,82,0.1); }
 
-  /* SITE SELECTOR */
-  .site-selector {
-    width: 100%; max-width: 460px;
-    margin-bottom: 14px;
-  }
-  .site-selector label {
-    font-size: 11px; letter-spacing: 2px;
-    text-transform: uppercase; color: var(--subtext);
-    display: block; margin-bottom: 8px;
-  }
-  .site-selector select {
-    width: 100%; padding: 14px 18px;
-    border-radius: 12px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-family: 'DM Sans', sans-serif;
-    font-size: 15px; font-weight: 600;
-    cursor: pointer; outline: none;
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23666' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 16px center;
-  }
+  .site-icon   { font-size: 36px; display: block; margin-bottom: 10px; }
+  .site-name   { font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
+  .site-status { font-family: 'Syne', sans-serif; font-size: clamp(11px, 3vw, 14px); font-weight: 800; letter-spacing: 1px; color: var(--muted); transition: color 0.5s; }
+  .site-card.armed    .site-status { color: var(--armed); }
+  .site-card.disarmed .site-status { color: var(--disarmed); }
+  .site-time   { font-size: 11px; color: var(--muted); margin-top: 8px; display: block; }
 
-  /* BUTTONS */
-  .btn-group { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 12px; }
+  hr.divider { max-width: 500px; margin: 0 auto 20px; border: none; border-top: 1px solid var(--border); }
 
-  .btn {
-    padding: 20px 28px; border-radius: 16px; border: none;
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 22px; letter-spacing: 3px;
-    cursor: pointer; transition: all 0.2s ease;
-    display: flex; align-items: center; justify-content: center; gap: 10px;
-  }
-  .btn:active { transform: scale(0.97); }
-
-  .btn-arm {
-    background: var(--on-accent); color: #000;
-    box-shadow: 0 4px 30px rgba(0,255,106,0.25);
-  }
-  .btn-arm:hover { box-shadow: 0 4px 50px rgba(0,255,106,0.5); }
-
-  .btn-disarm {
-    background: transparent; color: var(--off-accent);
-    border: 2px solid var(--off-accent);
-    box-shadow: 0 4px 20px rgba(255,64,64,0.1);
-  }
-  .btn-disarm:hover { background: rgba(255,64,64,0.07); box-shadow: 0 4px 40px rgba(255,64,64,0.25); }
-
-  /* HISTORY */
-  .history-section { width: 100%; max-width: 460px; margin-top: 28px; }
-  .history-title { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--subtext); margin-bottom: 10px; }
-  .history-list { display: flex; flex-direction: column; gap: 8px; }
-
+  /* HISTORIQUE */
+  .history-section { max-width: 500px; margin: 0 auto 28px; }
+  .history-title { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
   .history-item {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 10px; padding: 11px 14px;
-    display: flex; justify-content: space-between; align-items: center;
-    font-size: 12px; flex-wrap: wrap; gap: 6px;
+    display: grid; grid-template-columns: 26px 70px 1fr auto;
+    align-items: center; gap: 8px;
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 12px; margin-bottom: 7px; font-size: 13px;
   }
-  .badge {
-    font-family: 'Bebas Neue', sans-serif; font-size: 12px;
-    letter-spacing: 2px; padding: 3px 10px; border-radius: 6px;
-  }
-  .badge-on  { background: rgba(0,255,106,0.12); color: var(--on-accent); }
-  .badge-off { background: rgba(255,64,64,0.12);  color: var(--off-accent); }
-  .site-tag  { color: #888; font-size: 11px; }
-  .time      { color: var(--subtext); }
+  .h-badge { font-size: 15px; text-align: center; }
+  .h-site  { font-weight: 700; color: var(--text); }
+  .h-on    { color: var(--armed); }
+  .h-off   { color: var(--disarmed); }
+  .h-time  { color: var(--muted); font-size: 11px; text-align: right; }
+  .no-history { color: var(--muted); font-size: 13px; text-align: center; padding: 12px; }
 
-  .initial-msg { font-size: 14px; color: var(--subtext); text-align: center; padding: 12px 0; }
-
-  /* CONFIG WARNING */
-  .config-warning {
-    width: 100%; max-width: 460px;
-    background: rgba(255,180,0,0.08);
-    border: 1px solid rgba(255,180,0,0.3);
-    border-radius: 14px; padding: 16px 20px;
-    margin-bottom: 20px; font-size: 13px;
-    color: #ffb400; line-height: 1.6;
+  /* CONTROLS */
+  .controls { max-width: 500px; margin: 0 auto 0; }
+  .section-title { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .controls select {
+    width: 100%; padding: 13px 16px;
+    border-radius: 12px; background-color: var(--card-bg);
+    border: 1px solid var(--border); color: var(--text);
+    font-family: 'Mulish', sans-serif; font-size: 15px; font-weight: 700;
+    margin-bottom: 12px; outline: none; cursor: pointer; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23555' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 16px center;
   }
-  .config-warning strong { display: block; margin-bottom: 4px; font-size: 14px; }
+  .btn-group { display: flex; flex-direction: column; gap: 10px; }
+  .btn {
+    padding: 17px; border-radius: 13px; border: none;
+    font-family: 'Syne', sans-serif; font-size: 16px;
+    font-weight: 800; letter-spacing: 2px; cursor: pointer;
+    transition: all 0.2s ease; text-transform: uppercase;
+  }
+  .btn:active   { transform: scale(0.98); }
+  .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .btn-arm      { background: var(--armed); color: #000; box-shadow: 0 4px 24px rgba(0,230,118,0.3); }
+  .btn-arm:hover:not(:disabled) { box-shadow: 0 4px 40px rgba(0,230,118,0.5); }
+  .btn-disarm   { background: transparent; color: var(--disarmed); border: 2px solid var(--disarmed); }
+  .btn-disarm:hover:not(:disabled) { background: var(--disarmed-bg); }
 </style>
 </head>
-<body id="body" class="unknown">
+<body>
 
 <div class="header">
-  <h1>🔒 Alarme Siège</h1>
-  <p><span class="live-dot"></span>Synchronisation en temps réel &nbsp;·&nbsp; Siège &amp; IFP</p>
+  <h1>🔒 Surveillance Alarme</h1>
+  <p>Siège &nbsp;·&nbsp; IFP / Centre Forma Pro</p>
 </div>
 
-<div class="config-warning" id="configWarning">
-  <strong>⚙️ Configuration requise</strong>
-  Remplacez les valeurs Firebase dans le code (voir les instructions fournies avec ce fichier).
-  Une fois configuré, supprimez ce message.
+<!-- BOUTON DE VÉRIFICATION -->
+<div class="check-wrap">
+  <button id="btnCheck" onclick="checkStatus()">🔍 Vérifier le statut maintenant</button>
+  <div class="last-check" id="lastCheck"></div>
 </div>
 
-<!-- Statut principal -->
-<div class="status-card">
-  <span class="status-icon" id="icon">❓</span>
-  <div class="status-label" id="statusLabel">—</div>
-  <div class="status-sub" id="statusSub">En attente de mise à jour</div>
-  <div class="timestamp">
-    Dernière mise à jour
-    <span id="lastUpdate">—</span>
-    <div class="site-info" id="lastSite"></div>
+<!-- RÉSULTATS (cachés jusqu'au clic) -->
+<div id="statusSection">
+
+  <div class="global-badge" id="globalStatus">
+    <div id="globalLabel">—</div>
+    <div id="globalSub"></div>
   </div>
+
+  <div class="sites-grid">
+    <div class="site-card unknown" id="card-siege">
+      <span class="site-icon" id="icon-siege">❓</span>
+      <div class="site-name">Siège</div>
+      <div class="site-status" id="status-siege">—</div>
+      <span class="site-time" id="time-siege">—</span>
+    </div>
+    <div class="site-card unknown" id="card-ifp">
+      <span class="site-icon" id="icon-ifp">❓</span>
+      <div class="site-name">IFP</div>
+      <div class="site-status" id="status-ifp">—</div>
+      <span class="site-time" id="time-ifp">—</span>
+    </div>
+  </div>
+
+  <div class="history-section">
+    <div class="history-title">Historique récent</div>
+    <div id="historyList"><div class="no-history">—</div></div>
+  </div>
+
 </div>
 
-<!-- Sélecteur de site -->
-<div class="site-selector">
-  <label>Je suis sur le site :</label>
+<hr class="divider">
+
+<!-- ENREGISTRER SON STATUT -->
+<div class="controls">
+  <div class="section-title">Mettre à jour mon site</div>
   <select id="siteSelect">
     <option value="Siège">🏢 Siège</option>
     <option value="IFP">🏫 IFP / Centre Forma Pro</option>
   </select>
-</div>
-
-<!-- Boutons d'action -->
-<div class="btn-group">
-  <button class="btn btn-arm"    onclick="setStatus('armed')">✅ &nbsp;Alarme Activée</button>
-  <button class="btn btn-disarm" onclick="setStatus('disarmed')">❌ &nbsp;Alarme Non Activée</button>
-</div>
-
-<!-- Historique -->
-<div class="history-section">
-  <div class="history-title">Historique récent</div>
-  <div class="history-list" id="historyList">
-    <div class="initial-msg">Chargement…</div>
+  <div class="btn-group">
+    <button class="btn btn-arm"    id="btnArm"    onclick="setStatus('armed')">🔒 Alarme Activée</button>
+    <button class="btn btn-disarm" id="btnDisarm" onclick="setStatus('disarmed')">🔓 Alarme Non Activée</button>
   </div>
 </div>
 
