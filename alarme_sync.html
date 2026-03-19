@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Statut Alarme</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;600&display=swap" rel="stylesheet">
+
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, set, onValue, push } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+  // ⚠️ REMPLACEZ CES VALEURS PAR VOTRE CONFIGURATION FIREBASE (voir instructions)
+  const firebaseConfig = {
+     apiKey: "AIzaSyCx0zhCEiZUrD5v0D_o4TdbXhfxB1kszPI",
+  authDomain: "activation-alarme-441e8.firebaseapp.com",
+  databaseURL: "https://activation-alarme-441e8-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "activation-alarme-441e8",
+  storageBucket: "activation-alarme-441e8.firebasestorage.app",
+  messagingSenderId: "256760910640",
+  appId: "1:256760910640:web:ab85847d76a7c6e3c32ef5"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+
+  function formatDate(ts) {
+    const d = new Date(ts);
+    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      + ' à ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function applyStatus(status, ts, site) {
+    const body = document.getElementById('body');
+    const icon = document.getElementById('icon');
+    const label = document.getElementById('statusLabel');
+    const sub = document.getElementById('statusSub');
+    const lastUpdate = document.getElementById('lastUpdate');
+    const lastSite = document.getElementById('lastSite');
+
+    body.classList.remove('armed', 'disarmed', 'unknown');
+
+    if (status === 'armed') {
+      body.classList.add('armed');
+      icon.textContent = '🔒';
+      label.textContent = 'ACTIVÉE';
+      sub.textContent = 'Le siège est sécurisé';
+    } else if (status === 'disarmed') {
+      body.classList.add('disarmed');
+      icon.textContent = '🔓';
+      label.textContent = 'NON ACTIVÉE';
+      sub.textContent = 'Alarme non mise — action requise !';
+    } else {
+      body.classList.add('unknown');
+      icon.textContent = '❓';
+      label.textContent = '—';
+      sub.textContent = 'En attente de mise à jour';
+    }
+
+    lastUpdate.textContent = ts ? formatDate(ts) : '—';
+    lastSite.textContent = site ? '— ' + site : '';
+  }
+
+  function renderHistory(history) {
+    const list = document.getElementById('historyList');
+    if (!history) {
+      list.innerHTML = '<div class="initial-msg">Aucun historique pour l\'instant.</div>';
+      return;
+    }
+    const items = Object.values(history).reverse().slice(0, 6);
+    list.innerHTML = items.map(item => `
+      <div class="history-item">
+        <span class="${item.status === 'armed' ? 'badge badge-on' : 'badge badge-off'}">
+          ${item.status === 'armed' ? 'ACTIVÉE' : 'NON ACTIVÉE'}
+        </span>
+        <span class="site-tag">${item.site || ''}</span>
+        <span class="time">${formatDate(item.ts)}</span>
+      </div>
+    `).join('');
+  }
+
+  // Écoute en temps réel le statut
+  const statusRef = ref(db, 'alarme/status');
+  onValue(statusRef, (snapshot) => {
+    const data = snapshot.val();
+    if (data) {
+      applyStatus(data.status, data.ts, data.site);
+    }
+  });
+
+  // Écoute en temps réel l'historique
+  const historyRef = ref(db, 'alarme/history');
+  onValue(historyRef, (snapshot) => {
+    renderHistory(snapshot.val());
+  });
+
+  // Exposer setStatus globalement
+  window.setStatus = function(status) {
+    const site = document.getElementById('siteSelect').value;
+    const ts = Date.now();
+    const data = { status, ts, site };
+
+    // Mise à jour du statut principal
+    set(ref(db, 'alarme/status'), data);
+
+    // Ajout dans l'historique
+    push(ref(db, 'alarme/history'), data);
+  };
+</script>
+
+<style>
+  :root {
+    --on-bg: #071a07;
+    --on-accent: #00ff6a;
+    --on-glow: rgba(0,255,106,0.3);
+    --off-bg: #1a0707;
+    --off-accent: #ff4040;
+    --off-glow: rgba(255,64,64,0.3);
+    --neutral-bg: #0d0d0d;
+    --text: #f0f0f0;
+    --subtext: #666;
+    --card: rgba(255,255,255,0.04);
+    --border: rgba(255,255,255,0.07);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--neutral-bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 28px 20px 40px;
+    transition: background 0.7s ease;
+  }
+
+  body.armed   { background: var(--on-bg); }
+  body.disarmed { background: var(--off-bg); }
+
+  /* HEADER */
+  .header { text-align: center; margin-bottom: 28px; }
+  .header h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(22px, 5vw, 34px);
+    letter-spacing: 5px;
+    color: var(--subtext);
+  }
+  .header p { font-size: 12px; color: var(--subtext); margin-top: 5px; letter-spacing: 2px; text-transform: uppercase; }
+
+  /* LIVE DOT */
+  .live-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--on-accent);
+    margin-right: 6px;
+    animation: blink 1.5s ease-in-out infinite;
+    vertical-align: middle;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+  /* STATUS CARD */
+  .status-card {
+    width: 100%; max-width: 460px;
+    border-radius: 24px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    padding: 44px 28px 36px;
+    text-align: center;
+    backdrop-filter: blur(12px);
+    transition: box-shadow 0.7s ease, border-color 0.7s ease;
+    margin-bottom: 20px;
+  }
+  body.armed   .status-card { box-shadow: 0 0 70px var(--on-glow);  border-color: rgba(0,255,106,0.25); }
+  body.disarmed .status-card { box-shadow: 0 0 70px var(--off-glow); border-color: rgba(255,64,64,0.25); }
+
+  .status-icon {
+    font-size: 72px; line-height: 1;
+    margin-bottom: 18px; display: block;
+    transition: all 0.5s ease;
+  }
+  body.armed .status-icon { animation: pulse-glow 2.5s ease-in-out infinite; }
+  @keyframes pulse-glow { 0%,100%{opacity:1} 50%{opacity:0.55} }
+
+  .status-label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(52px, 16vw, 96px);
+    letter-spacing: 4px; line-height: 1;
+    color: var(--subtext);
+    transition: color 0.7s ease;
+  }
+  body.armed   .status-label { color: var(--on-accent); }
+  body.disarmed .status-label { color: var(--off-accent); }
+
+  .status-sub {
+    font-size: 13px; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--subtext);
+    margin-top: 10px; transition: color 0.7s ease;
+  }
+  body.armed   .status-sub { color: rgba(0,255,106,0.6); }
+  body.disarmed .status-sub { color: rgba(255,64,64,0.6); }
+
+  .timestamp {
+    margin-top: 26px; padding-top: 22px;
+    border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--subtext);
+  }
+  .timestamp span { display: block; font-size: 14px; color: var(--text); margin-top: 4px; font-weight: 600; }
+  .timestamp .site-info { font-size: 12px; color: var(--subtext); margin-top: 2px; }
+
+  /* SITE SELECTOR */
+  .site-selector {
+    width: 100%; max-width: 460px;
+    margin-bottom: 14px;
+  }
+  .site-selector label {
+    font-size: 11px; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--subtext);
+    display: block; margin-bottom: 8px;
+  }
+  .site-selector select {
+    width: 100%; padding: 14px 18px;
+    border-radius: 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px; font-weight: 600;
+    cursor: pointer; outline: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23666' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 16px center;
+  }
+
+  /* BUTTONS */
+  .btn-group { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 12px; }
+
+  .btn {
+    padding: 20px 28px; border-radius: 16px; border: none;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px; letter-spacing: 3px;
+    cursor: pointer; transition: all 0.2s ease;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+  }
+  .btn:active { transform: scale(0.97); }
+
+  .btn-arm {
+    background: var(--on-accent); color: #000;
+    box-shadow: 0 4px 30px rgba(0,255,106,0.25);
+  }
+  .btn-arm:hover { box-shadow: 0 4px 50px rgba(0,255,106,0.5); }
+
+  .btn-disarm {
+    background: transparent; color: var(--off-accent);
+    border: 2px solid var(--off-accent);
+    box-shadow: 0 4px 20px rgba(255,64,64,0.1);
+  }
+  .btn-disarm:hover { background: rgba(255,64,64,0.07); box-shadow: 0 4px 40px rgba(255,64,64,0.25); }
+
+  /* HISTORY */
+  .history-section { width: 100%; max-width: 460px; margin-top: 28px; }
+  .history-title { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--subtext); margin-bottom: 10px; }
+  .history-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .history-item {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 11px 14px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 12px; flex-wrap: wrap; gap: 6px;
+  }
+  .badge {
+    font-family: 'Bebas Neue', sans-serif; font-size: 12px;
+    letter-spacing: 2px; padding: 3px 10px; border-radius: 6px;
+  }
+  .badge-on  { background: rgba(0,255,106,0.12); color: var(--on-accent); }
+  .badge-off { background: rgba(255,64,64,0.12);  color: var(--off-accent); }
+  .site-tag  { color: #888; font-size: 11px; }
+  .time      { color: var(--subtext); }
+
+  .initial-msg { font-size: 14px; color: var(--subtext); text-align: center; padding: 12px 0; }
+
+  /* CONFIG WARNING */
+  .config-warning {
+    width: 100%; max-width: 460px;
+    background: rgba(255,180,0,0.08);
+    border: 1px solid rgba(255,180,0,0.3);
+    border-radius: 14px; padding: 16px 20px;
+    margin-bottom: 20px; font-size: 13px;
+    color: #ffb400; line-height: 1.6;
+  }
+  .config-warning strong { display: block; margin-bottom: 4px; font-size: 14px; }
+</style>
+</head>
+<body id="body" class="unknown">
+
+<div class="header">
+  <h1>🔒 Alarme Siège</h1>
+  <p><span class="live-dot"></span>Synchronisation en temps réel &nbsp;·&nbsp; Siège &amp; IFP</p>
+</div>
+
+<div class="config-warning" id="configWarning">
+  <strong>⚙️ Configuration requise</strong>
+  Remplacez les valeurs Firebase dans le code (voir les instructions fournies avec ce fichier).
+  Une fois configuré, supprimez ce message.
+</div>
+
+<!-- Statut principal -->
+<div class="status-card">
+  <span class="status-icon" id="icon">❓</span>
+  <div class="status-label" id="statusLabel">—</div>
+  <div class="status-sub" id="statusSub">En attente de mise à jour</div>
+  <div class="timestamp">
+    Dernière mise à jour
+    <span id="lastUpdate">—</span>
+    <div class="site-info" id="lastSite"></div>
+  </div>
+</div>
+
+<!-- Sélecteur de site -->
+<div class="site-selector">
+  <label>Je suis sur le site :</label>
+  <select id="siteSelect">
+    <option value="Siège">🏢 Siège</option>
+    <option value="IFP">🏫 IFP / Centre Forma Pro</option>
+  </select>
+</div>
+
+<!-- Boutons d'action -->
+<div class="btn-group">
+  <button class="btn btn-arm"    onclick="setStatus('armed')">✅ &nbsp;Alarme Activée</button>
+  <button class="btn btn-disarm" onclick="setStatus('disarmed')">❌ &nbsp;Alarme Non Activée</button>
+</div>
+
+<!-- Historique -->
+<div class="history-section">
+  <div class="history-title">Historique récent</div>
+  <div class="history-list" id="historyList">
+    <div class="initial-msg">Chargement…</div>
+  </div>
+</div>
+
+</body>
+</html>
