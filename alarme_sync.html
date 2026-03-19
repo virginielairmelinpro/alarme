@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Alarme</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@800&family=Mulish:wght@700&display=swap" rel="stylesheet">
 
@@ -12,7 +12,7 @@
 
   // ⚠️ REMPLACEZ CES VALEURS PAR VOTRE CONFIGURATION FIREBASE
   const firebaseConfig = {
-    apiKey: "AIzaSyCx0zhCEiZUrD5v0D_o4TdbXhfxB1kszPI",
+   apiKey: "AIzaSyCx0zhCEiZUrD5v0D_o4TdbXhfxB1kszPI",
   authDomain: "activation-alarme-441e8.firebaseapp.com",
   databaseURL: "https://activation-alarme-441e8-default-rtdb.europe-west1.firebasedatabase.app",
   projectId: "activation-alarme-441e8",
@@ -32,34 +32,42 @@
   }
 
   function renderTile(siteKey, data) {
-    const tile = document.getElementById('tile-' + siteKey);
-    const time = document.getElementById('time-' + siteKey);
+    const tile  = document.getElementById('tile-' + siteKey);
+    const label = document.getElementById('lbl-'  + siteKey);
+    const time  = document.getElementById('time-' + siteKey);
 
-    if (!data) {
-      tile.setAttribute('data-state', 'unknown');
-      time.textContent = '';
-      return;
-    }
-
-    const armed = data.status === 'armed';
+    const armed = data && data.status === 'armed';
     tile.setAttribute('data-state', armed ? 'on' : 'off');
-    time.textContent = fmt(data.ts);
+    label.textContent = armed ? 'ACTIVÉE' : 'NON ACTIVÉE';
+    time.textContent  = data ? fmt(data.ts) : '';
   }
 
-  window.refresh = async function() {
-    const btn = document.getElementById('btnRefresh');
-    btn.textContent = 'Chargement...';
-    btn.disabled = true;
+  // Chargement auto au démarrage
+  async function loadAll() {
     try {
       const [s, i] = await Promise.all([
         get(ref(db, 'alarme/siege')),
         get(ref(db, 'alarme/ifp'))
       ]);
+      // Si pas de données Firebase → affiche NON ACTIVÉE par défaut
       renderTile('siege', s.val());
       renderTile('ifp',   i.val());
       document.getElementById('refreshTime').textContent = 'Vérifié le ' + fmt(Date.now());
-    } catch(e) { alert('Erreur de connexion.'); }
-    btn.textContent = '🔄  Actualiser le statut';
+    } catch(e) {
+      // En cas d'erreur réseau → affiche NON ACTIVÉE par défaut
+      renderTile('siege', null);
+      renderTile('ifp',   null);
+    }
+  }
+
+  window.addEventListener('load', loadAll);
+
+  window.refresh = async function() {
+    const btn = document.getElementById('btnRefresh');
+    btn.textContent = 'Chargement...';
+    btn.disabled = true;
+    await loadAll();
+    btn.textContent = '🔄  Actualiser';
     btn.disabled = false;
   };
 
@@ -79,43 +87,47 @@
 </script>
 
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
 
-  body {
-    font-family: 'Mulish', sans-serif;
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
     background: #0e0e0e;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 24px 14px 40px;
-    gap: 16px;
+    font-family: 'Mulish', sans-serif;
   }
 
+  /* LAYOUT PLEIN ÉCRAN */
+  .screen {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 16px 16px 12px;
+    gap: 12px;
+  }
+
+  /* TITRE */
   h1 {
     font-family: 'Syne', sans-serif;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 800;
     letter-spacing: 6px;
     text-transform: uppercase;
-    color: #333;
+    color: #2a2a2a;
     text-align: center;
+    flex-shrink: 0;
   }
 
-  /* GRILLE */
+  /* GRILLE 2 TUILES — prend tout l'espace */
   .grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 14px;
-    width: 100%;
-    max-width: 520px;
-  }
-  @media (max-width: 400px) {
-    .grid { grid-template-columns: 1fr; }
+    gap: 12px;
+    flex: 1;
+    min-height: 0;
   }
 
-  /* ============ TUILE ============ */
+  /* TUILE */
   .tile {
     border-radius: 22px;
     overflow: hidden;
@@ -124,74 +136,76 @@
     border: 3px solid #222;
     background: #161616;
     transition: border-color 0.3s, background 0.3s;
-    cursor: default;
+    min-height: 0;
   }
 
-  /* ---- ZONE STATUT (grande, dominante) ---- */
+  /* ZONE STATUT — prend la majorité */
   .tile-status {
     flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 28px 12px 20px;
-    gap: 10px;
-    transition: background 0.3s;
+    padding: 16px 12px;
+    gap: 8px;
     background: #1a1a1a;
+    transition: background 0.3s;
+    min-height: 0;
   }
 
   .tile-emoji {
-    font-size: 54px;
+    font-size: clamp(32px, 6vw, 56px);
     line-height: 1;
   }
 
   .tile-site {
     font-family: 'Syne', sans-serif;
-    font-size: 11px;
+    font-size: clamp(10px, 1.8vw, 14px);
     font-weight: 800;
     letter-spacing: 5px;
     text-transform: uppercase;
-    color: #444;
+    color: #3a3a3a;
   }
 
   .tile-label {
     font-family: 'Syne', sans-serif;
-    font-size: clamp(18px, 5vw, 24px);
+    font-size: clamp(18px, 4.5vw, 38px);
     font-weight: 800;
     letter-spacing: 2px;
     text-align: center;
     line-height: 1.1;
-    transition: color 0.3s;
-    color: #333;
+    color: #2a2a2a;
+    transition: color 0.3s, font-size 0.2s;
   }
 
   .tile-time {
-    font-size: 11px;
-    color: #333;
-    transition: color 0.3s;
+    font-size: clamp(10px, 1.5vw, 12px);
+    color: #2a2a2a;
     text-align: center;
+    transition: color 0.3s;
     min-height: 14px;
   }
 
-  /* ---- ZONE BOUTONS (discrète, en bas) ---- */
+  /* ZONE BOUTONS */
   .tile-actions {
     display: flex;
+    flex-shrink: 0;
     border-top: 2px solid #1e1e1e;
     transition: border-color 0.3s;
   }
 
   .tile-actions button {
     flex: 1;
-    padding: 13px 8px;
+    padding: clamp(12px, 2.5vh, 20px) 8px;
     border: none;
     background: transparent;
     font-family: 'Syne', sans-serif;
-    font-size: 12px;
+    font-size: clamp(11px, 1.8vw, 15px);
     font-weight: 800;
     letter-spacing: 1px;
     text-transform: uppercase;
     cursor: pointer;
-    color: #333;
+    color: #2a2a2a;
     transition: background 0.2s, color 0.2s;
   }
 
@@ -200,133 +214,106 @@
     transition: border-color 0.3s, background 0.2s, color 0.2s;
   }
 
-  .tile-actions button:hover { background: rgba(255,255,255,0.05); color: #fff; }
-  .tile-actions button:active { transform: scale(0.97); }
+  .tile-actions button:active { opacity: 0.7; }
 
-  /* ============ ÉTATS ============ */
-
-  /* ACTIVÉE → vert dominant */
+  /* ===== ÉTAT ACTIVÉE ===== */
   .tile[data-state="on"] {
     border-color: #00c853;
-    background: #00c853;
   }
-  .tile[data-state="on"] .tile-status {
-    background: #003318;
-  }
-  .tile[data-state="on"] .tile-label { color: #00e676; font-size: clamp(20px, 5.5vw, 28px); }
-  .tile[data-state="on"] .tile-time  { color: #1a5c33; }
-  .tile[data-state="on"] .tile-actions { border-top-color: #005724; }
-  .tile[data-state="on"] .tile-actions button:first-child { border-right-color: #005724; }
-  .tile[data-state="on"] .btn-activate { color: #00e676; }
-  .tile[data-state="on"] .btn-deactivate { color: #1a5c33; }
+  .tile[data-state="on"] .tile-status   { background: #001f0d; }
+  .tile[data-state="on"] .tile-label    { color: #00e676; }
+  .tile[data-state="on"] .tile-time     { color: #1a5c33; }
+  .tile[data-state="on"] .tile-actions  { background: #002710; border-top-color: #004d1a; }
+  .tile[data-state="on"] .tile-actions button:first-child { border-right-color: #004d1a; }
+  .tile[data-state="on"] .btn-activate   { color: #00e676; }
+  .tile[data-state="on"] .btn-deactivate { color: #1a4a2a; }
+  .tile[data-state="on"] .btn-activate:hover { background: rgba(0,200,83,0.12); }
 
-  /* NON ACTIVÉE → rouge dominant */
+  /* ===== ÉTAT NON ACTIVÉE ===== */
   .tile[data-state="off"] {
     border-color: #d50000;
-    background: #d50000;
   }
-  .tile[data-state="off"] .tile-status {
-    background: #330000;
-  }
-  .tile[data-state="off"] .tile-label { color: #ff1744; font-size: clamp(14px, 4vw, 18px); }
-  .tile[data-state="off"] .tile-time  { color: #5c1a1a; }
-  .tile[data-state="off"] .tile-actions { border-top-color: #5c0000; }
-  .tile[data-state="off"] .tile-actions button:first-child { border-right-color: #5c0000; }
-  .tile[data-state="off"] .btn-activate   { color: #5c1a1a; }
+  .tile[data-state="off"] .tile-status   { background: #1f0000; }
+  .tile[data-state="off"] .tile-label    { color: #ff1744; }
+  .tile[data-state="off"] .tile-time     { color: #5c1a1a; }
+  .tile[data-state="off"] .tile-actions  { background: #270000; border-top-color: #4d0000; }
+  .tile[data-state="off"] .tile-actions button:first-child { border-right-color: #4d0000; }
+  .tile[data-state="off"] .btn-activate   { color: #3a1a1a; }
   .tile[data-state="off"] .btn-deactivate { color: #ff1744; }
+  .tile[data-state="off"] .btn-deactivate:hover { background: rgba(213,0,0,0.12); }
 
-  /* INCONNU */
-  .tile[data-state="unknown"] .tile-label { color: #333; }
-
-  /* ============ ACTUALISER ============ */
-  .refresh-wrap {
-    width: 100%;
-    max-width: 520px;
+  /* ===== BOUTON ACTUALISER ===== */
+  .bottom {
+    flex-shrink: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
   }
 
   #btnRefresh {
-    width: 100%;
-    padding: 15px;
-    border-radius: 14px;
+    padding: clamp(10px, 1.8vh, 16px) 28px;
+    border-radius: 12px;
     border: 2px solid #222;
     background: #161616;
-    color: #444;
+    color: #333;
     font-family: 'Syne', sans-serif;
-    font-size: 13px;
+    font-size: clamp(11px, 1.6vw, 14px);
     font-weight: 800;
     letter-spacing: 2px;
     text-transform: uppercase;
     cursor: pointer;
     transition: all 0.2s;
   }
-  #btnRefresh:hover    { border-color: #448aff; color: #448aff; background: rgba(68,138,255,0.06); }
-  #btnRefresh:active   { transform: scale(0.98); }
+  #btnRefresh:hover    { border-color: #448aff; color: #448aff; }
+  #btnRefresh:active   { transform: scale(0.97); }
   #btnRefresh:disabled { opacity: 0.4; cursor: not-allowed; }
 
-  #refreshTime { font-size: 11px; color: #2a2a2a; letter-spacing: 1px; }
+  #refreshTime { font-size: 10px; color: #252525; letter-spacing: 1px; }
 </style>
 </head>
 <body>
+<div class="screen">
 
-<h1>Surveillance Alarme</h1>
+  <h1>Surveillance Alarme</h1>
 
-<div class="grid">
+  <div class="grid">
 
-  <!-- SIÈGE -->
-  <div class="tile" id="tile-siege" data-state="unknown">
-    <div class="tile-status">
-      <div class="tile-emoji">🏢</div>
-      <div class="tile-site">Siège</div>
-      <div class="tile-label" id="lbl-siege">?</div>
-      <div class="tile-time"  id="time-siege"></div>
+    <!-- SIÈGE -->
+    <div class="tile" id="tile-siege" data-state="off">
+      <div class="tile-status">
+        <div class="tile-emoji">🏢</div>
+        <div class="tile-site">Siège</div>
+        <div class="tile-label" id="lbl-siege">NON ACTIVÉE</div>
+        <div class="tile-time"  id="time-siege"></div>
+      </div>
+      <div class="tile-actions">
+        <button class="btn-activate"   onclick="setStatus('siege','armed')">✔ Activée</button>
+        <button class="btn-deactivate" onclick="setStatus('siege','disarmed')">✘ Non activée</button>
+      </div>
     </div>
-    <div class="tile-actions">
-      <button class="btn-activate"   onclick="setStatus('siege','armed')">✔ Activée</button>
-      <button class="btn-deactivate" onclick="setStatus('siege','disarmed')">✘ Non activée</button>
+
+    <!-- IFP -->
+    <div class="tile" id="tile-ifp" data-state="off">
+      <div class="tile-status">
+        <div class="tile-emoji">🏫</div>
+        <div class="tile-site">IFP</div>
+        <div class="tile-label" id="lbl-ifp">NON ACTIVÉE</div>
+        <div class="tile-time"  id="time-ifp"></div>
+      </div>
+      <div class="tile-actions">
+        <button class="btn-activate"   onclick="setStatus('ifp','armed')">✔ Activée</button>
+        <button class="btn-deactivate" onclick="setStatus('ifp','disarmed')">✘ Non activée</button>
+      </div>
     </div>
+
   </div>
 
-  <!-- IFP -->
-  <div class="tile" id="tile-ifp" data-state="unknown">
-    <div class="tile-status">
-      <div class="tile-emoji">🏫</div>
-      <div class="tile-site">IFP</div>
-      <div class="tile-label" id="lbl-ifp">?</div>
-      <div class="tile-time"  id="time-ifp"></div>
-    </div>
-    <div class="tile-actions">
-      <button class="btn-activate"   onclick="setStatus('ifp','armed')">✔ Activée</button>
-      <button class="btn-deactivate" onclick="setStatus('ifp','disarmed')">✘ Non activée</button>
-    </div>
+  <div class="bottom">
+    <button id="btnRefresh" onclick="refresh()">🔄  Actualiser</button>
+    <span id="refreshTime"></span>
   </div>
 
 </div>
-
-<div class="refresh-wrap">
-  <button id="btnRefresh" onclick="refresh()">🔄  Actualiser le statut</button>
-  <span id="refreshTime"></span>
-</div>
-
-<script>
-  // Mettre à jour le texte du label selon l'état
-  const observer = new MutationObserver(() => {
-    ['siege','ifp'].forEach(k => {
-      const tile  = document.getElementById('tile-' + k);
-      const label = document.getElementById('lbl-'  + k);
-      const state = tile.getAttribute('data-state');
-      if (state === 'on')      label.textContent = 'ACTIVÉE';
-      else if (state === 'off') label.textContent = 'NON ACTIVÉE';
-      else                      label.textContent = '?';
-    });
-  });
-  ['siege','ifp'].forEach(k =>
-    observer.observe(document.getElementById('tile-' + k), { attributes: true })
-  );
-</script>
-
 </body>
 </html>
