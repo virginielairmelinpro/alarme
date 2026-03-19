@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Alarme — Siège & IFP</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Mulish:wght@400;600;700&display=swap" rel="stylesheet">
+<title>Alarme</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@800&family=Mulish:wght@700&display=swap" rel="stylesheet">
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -12,7 +12,7 @@
 
   // ⚠️ REMPLACEZ CES VALEURS PAR VOTRE CONFIGURATION FIREBASE
   const firebaseConfig = {
-    apiKey: "AIzaSyCx0zhCEiZUrD5v0D_o4TdbXhfxB1kszPI",
+     apiKey: "AIzaSyCx0zhCEiZUrD5v0D_o4TdbXhfxB1kszPI",
   authDomain: "activation-alarme-441e8.firebaseapp.com",
   databaseURL: "https://activation-alarme-441e8-default-rtdb.europe-west1.firebasedatabase.app",
   projectId: "activation-alarme-441e8",
@@ -22,367 +22,311 @@
   };
 
   const app = initializeApp(firebaseConfig);
-  const db = getDatabase(app);
+  const db  = getDatabase(app);
 
-  function formatTime(ts) {
-    if (!ts) return '—';
+  function fmt(ts) {
+    if (!ts) return '';
     const d = new Date(ts);
-    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
-      + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})
+      + ' à ' + d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
   }
 
-  function updateGlobalStatus(siege, ifp) {
-    const globalEl = document.getElementById('globalStatus');
-    const globalLabel = document.getElementById('globalLabel');
-    const globalSub = document.getElementById('globalSub');
-    const body = document.body;
-
-    const siegeOn = siege && siege.status === 'armed';
-    const ifpOn   = ifp   && ifp.status   === 'armed';
-
-    body.className = '';
-
-    if (siegeOn && ifpOn) {
-      body.classList.add('all-armed');
-      globalEl.className = 'global-badge all-on';
-      globalLabel.textContent = '✅ TOUT SÉCURISÉ';
-      globalSub.textContent = 'Les deux sites sont protégés';
-    } else if (!siegeOn && !ifpOn) {
-      body.classList.add('all-disarmed');
-      globalEl.className = 'global-badge all-off';
-      globalLabel.textContent = '🔴 AUCUNE ALARME';
-      globalSub.textContent = 'Aucun site n\'est sécurisé !';
-    } else {
-      body.classList.add('partial');
-      globalEl.className = 'global-badge partial';
-      globalLabel.textContent = '⚠️ PARTIEL';
-      globalSub.textContent = siegeOn
-        ? 'Siège sécurisé — IFP en attente'
-        : 'IFP sécurisé — Siège en attente';
-    }
-  }
-
-  function updateSiteCard(siteId, data) {
-    const card     = document.getElementById('card-'   + siteId);
-    const statusEl = document.getElementById('status-' + siteId);
-    const timeEl   = document.getElementById('time-'   + siteId);
-    const iconEl   = document.getElementById('icon-'   + siteId);
+  function renderTile(siteKey, data) {
+    const tile = document.getElementById('tile-' + siteKey);
+    const time = document.getElementById('time-' + siteKey);
 
     if (!data) {
-      card.className = 'site-card unknown';
-      statusEl.textContent = 'Inconnu';
-      timeEl.textContent = '—';
-      iconEl.textContent = '❓';
+      tile.setAttribute('data-state', 'unknown');
+      time.textContent = '';
       return;
     }
 
-    if (data.status === 'armed') {
-      card.className = 'site-card armed';
-      statusEl.textContent = siteId === 'siege' ? 'SIÈGE SÉCURISÉ' : 'IFP SÉCURISÉ';
-      iconEl.textContent = '🔒';
-    } else {
-      card.className = 'site-card disarmed';
-      statusEl.textContent = siteId === 'siege' ? 'SIÈGE NON ACTIVÉ' : 'IFP NON ACTIVÉ';
-      iconEl.textContent = '🔓';
-    }
-    timeEl.textContent = formatTime(data.ts);
+    const armed = data.status === 'armed';
+    tile.setAttribute('data-state', armed ? 'on' : 'off');
+    time.textContent = fmt(data.ts);
   }
 
-  function renderHistory(history) {
-    const list = document.getElementById('historyList');
-    if (!history) {
-      list.innerHTML = '<div class="no-history">Aucun historique</div>';
-      return;
-    }
-    const items = Object.values(history).reverse().slice(0, 8);
-    list.innerHTML = items.map(item => `
-      <div class="history-item">
-        <span class="h-badge">${item.status === 'armed' ? '🔒' : '🔓'}</span>
-        <span class="h-site">${item.site || '—'}</span>
-        <span class="h-status ${item.status === 'armed' ? 'h-on' : 'h-off'}">${item.status === 'armed' ? 'Activée' : 'Non activée'}</span>
-        <span class="h-time">${formatTime(item.ts)}</span>
-      </div>
-    `).join('');
-  }
-
-  // ✅ LECTURE UNIQUE à la demande — pas de requête en boucle
-  window.checkStatus = async function() {
-    const btn = document.getElementById('btnCheck');
-    const lastCheck = document.getElementById('lastCheck');
-
+  window.refresh = async function() {
+    const btn = document.getElementById('btnRefresh');
+    btn.textContent = 'Chargement...';
     btn.disabled = true;
-    btn.textContent = '⏳ Vérification...';
-
     try {
-      const [siegeSnap, ifpSnap, histSnap] = await Promise.all([
+      const [s, i] = await Promise.all([
         get(ref(db, 'alarme/siege')),
-        get(ref(db, 'alarme/ifp')),
-        get(ref(db, 'alarme/history'))
+        get(ref(db, 'alarme/ifp'))
       ]);
-
-      const siegeData = siegeSnap.val();
-      const ifpData   = ifpSnap.val();
-
-      updateSiteCard('siege', siegeData);
-      updateSiteCard('ifp',   ifpData);
-      updateGlobalStatus(siegeData, ifpData);
-      renderHistory(histSnap.val());
-
-      // Afficher la section résultat
-      document.getElementById('statusSection').style.display = 'block';
-      lastCheck.textContent = 'Dernière vérification : ' + formatTime(Date.now());
-
-    } catch(e) {
-      alert('Erreur de connexion. Vérifiez votre internet.');
-    }
-
+      renderTile('siege', s.val());
+      renderTile('ifp',   i.val());
+      document.getElementById('refreshTime').textContent = 'Vérifié le ' + fmt(Date.now());
+    } catch(e) { alert('Erreur de connexion.'); }
+    btn.textContent = '🔄  Actualiser le statut';
     btn.disabled = false;
-    btn.textContent = '🔍 Vérifier le statut maintenant';
   };
 
-  // ✅ Enregistrement du statut (écriture uniquement)
-  window.setStatus = async function(status) {
-    const site    = document.getElementById('siteSelect').value;
-    const siteKey = site === 'Siège' ? 'siege' : 'ifp';
-    const ts      = Date.now();
-    const data    = { status, ts, site };
-
-    const btn = status === 'armed'
-      ? document.getElementById('btnArm')
-      : document.getElementById('btnDisarm');
-
-    btn.disabled = true;
-    btn.textContent = '⏳ Enregistrement...';
-
+  window.setStatus = async function(siteKey, status) {
+    const siteLabel = siteKey === 'siege' ? 'Siège' : 'IFP';
+    const ts   = Date.now();
+    const data = { status, ts, site: siteLabel };
     try {
       await Promise.all([
         set(ref(db, 'alarme/' + siteKey), data),
         push(ref(db, 'alarme/history'), data)
       ]);
-      btn.textContent = status === 'armed' ? '✅ Alarme enregistrée !' : '✅ Statut enregistré !';
-      setTimeout(() => {
-        btn.disabled = false;
-        btn.textContent = status === 'armed' ? '🔒 Alarme Activée' : '🔓 Alarme Non Activée';
-      }, 2000);
-    } catch(e) {
-      alert('Erreur lors de l\'enregistrement. Vérifiez votre internet.');
-      btn.disabled = false;
-      btn.textContent = status === 'armed' ? '🔒 Alarme Activée' : '🔓 Alarme Non Activée';
-    }
+      renderTile(siteKey, data);
+      document.getElementById('refreshTime').textContent = 'Mis à jour le ' + fmt(ts);
+    } catch(e) { alert('Erreur lors de l\'enregistrement.'); }
   };
 </script>
 
 <style>
-  :root {
-    --bg: #0f0f13;
-    --card-bg: #17171e;
-    --border: rgba(255,255,255,0.07);
-    --text: #f0f0f0;
-    --muted: #555;
-    --armed: #00e676;
-    --armed-bg: rgba(0,230,118,0.08);
-    --armed-border: rgba(0,230,118,0.25);
-    --disarmed: #ff5252;
-    --disarmed-bg: rgba(255,82,82,0.08);
-    --disarmed-border: rgba(255,82,82,0.25);
-    --warn: #ffab00;
-    --warn-bg: rgba(255,171,0,0.08);
-    --warn-border: rgba(255,171,0,0.25);
-    --blue: #448aff;
-    --blue-bg: rgba(68,138,255,0.1);
-    --blue-border: rgba(68,138,255,0.3);
-  }
-
   * { margin:0; padding:0; box-sizing:border-box; }
 
   body {
     font-family: 'Mulish', sans-serif;
-    background: var(--bg);
-    color: var(--text);
+    background: #0e0e0e;
     min-height: 100vh;
-    padding: 24px 16px 48px;
-    transition: background 0.5s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 14px 40px;
+    gap: 16px;
   }
-  body.all-armed    { background: #080f09; }
-  body.all-disarmed { background: #0f0808; }
-  body.partial      { background: #0d0c07; }
 
-  /* HEADER */
-  .header { text-align: center; margin-bottom: 28px; }
-  .header h1 {
+  h1 {
     font-family: 'Syne', sans-serif;
-    font-size: clamp(18px, 5vw, 28px);
-    font-weight: 800; letter-spacing: 3px; text-transform: uppercase; color: #fff;
-  }
-  .header p { font-size: 12px; color: var(--muted); margin-top: 5px; letter-spacing: 1px; }
-
-  /* BOUTON PRINCIPAL DE VÉRIFICATION */
-  .check-wrap { max-width: 500px; margin: 0 auto 20px; }
-
-  #btnCheck {
-    width: 100%; padding: 20px;
-    border-radius: 16px; border: 2px solid var(--blue-border);
-    background: var(--blue-bg); color: var(--blue);
-    font-family: 'Syne', sans-serif; font-size: 17px;
-    font-weight: 800; letter-spacing: 2px; text-transform: uppercase;
-    cursor: pointer; transition: all 0.2s ease;
-  }
-  #btnCheck:hover   { background: rgba(68,138,255,0.18); box-shadow: 0 0 30px rgba(68,138,255,0.2); }
-  #btnCheck:active  { transform: scale(0.98); }
-  #btnCheck:disabled { opacity: 0.6; cursor: not-allowed; }
-
-  .last-check {
-    text-align: center; font-size: 11px; color: var(--muted);
-    margin-top: 8px; letter-spacing: 1px;
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    color: #333;
+    text-align: center;
   }
 
-  /* SECTION STATUT (cachée par défaut) */
-  #statusSection { display: none; }
-
-  /* GLOBAL */
-  .global-badge {
-    max-width: 500px; margin: 0 auto 20px;
-    border-radius: 16px; padding: 18px 24px;
-    text-align: center; border: 1px solid var(--border);
-    transition: all 0.5s ease;
+  /* GRILLE */
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    width: 100%;
+    max-width: 520px;
   }
-  .global-badge.all-on  { background: var(--armed-bg);    border-color: var(--armed-border);    box-shadow: 0 0 40px rgba(0,230,118,0.12); }
-  .global-badge.all-off { background: var(--disarmed-bg); border-color: var(--disarmed-border); box-shadow: 0 0 40px rgba(255,82,82,0.12); }
-  .global-badge.partial { background: var(--warn-bg);     border-color: var(--warn-border);     box-shadow: 0 0 40px rgba(255,171,0,0.12); }
+  @media (max-width: 400px) {
+    .grid { grid-template-columns: 1fr; }
+  }
 
-  #globalLabel {
+  /* ============ TUILE ============ */
+  .tile {
+    border-radius: 22px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    border: 3px solid #222;
+    background: #161616;
+    transition: border-color 0.3s, background 0.3s;
+    cursor: default;
+  }
+
+  /* ---- ZONE STATUT (grande, dominante) ---- */
+  .tile-status {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 28px 12px 20px;
+    gap: 10px;
+    transition: background 0.3s;
+    background: #1a1a1a;
+  }
+
+  .tile-emoji {
+    font-size: 54px;
+    line-height: 1;
+  }
+
+  .tile-site {
     font-family: 'Syne', sans-serif;
-    font-size: clamp(18px, 5vw, 26px); font-weight: 800; letter-spacing: 2px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 5px;
+    text-transform: uppercase;
+    color: #444;
   }
-  .all-on  #globalLabel { color: var(--armed); }
-  .all-off #globalLabel { color: var(--disarmed); }
-  .partial #globalLabel { color: var(--warn); }
-  #globalSub { font-size: 13px; color: var(--muted); margin-top: 4px; }
 
-  /* SITE CARDS */
-  .sites-grid {
-    display: grid; grid-template-columns: 1fr 1fr;
-    gap: 12px; max-width: 500px; margin: 0 auto 20px;
+  .tile-label {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(18px, 5vw, 24px);
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-align: center;
+    line-height: 1.1;
+    transition: color 0.3s;
+    color: #333;
   }
-  @media (max-width: 380px) { .sites-grid { grid-template-columns: 1fr; } }
 
-  .site-card {
-    border-radius: 18px; padding: 20px 14px;
-    text-align: center; border: 1px solid var(--border);
-    background: var(--card-bg); transition: all 0.5s ease;
+  .tile-time {
+    font-size: 11px;
+    color: #333;
+    transition: color 0.3s;
+    text-align: center;
+    min-height: 14px;
   }
-  .site-card.armed    { background: var(--armed-bg);    border-color: var(--armed-border);    box-shadow: 0 0 28px rgba(0,230,118,0.1); }
-  .site-card.disarmed { background: var(--disarmed-bg); border-color: var(--disarmed-border); box-shadow: 0 0 28px rgba(255,82,82,0.1); }
 
-  .site-icon   { font-size: 36px; display: block; margin-bottom: 10px; }
-  .site-name   { font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
-  .site-status { font-family: 'Syne', sans-serif; font-size: clamp(11px, 3vw, 14px); font-weight: 800; letter-spacing: 1px; color: var(--muted); transition: color 0.5s; }
-  .site-card.armed    .site-status { color: var(--armed); }
-  .site-card.disarmed .site-status { color: var(--disarmed); }
-  .site-time   { font-size: 11px; color: var(--muted); margin-top: 8px; display: block; }
-
-  hr.divider { max-width: 500px; margin: 0 auto 20px; border: none; border-top: 1px solid var(--border); }
-
-  /* HISTORIQUE */
-  .history-section { max-width: 500px; margin: 0 auto 28px; }
-  .history-title { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
-  .history-item {
-    display: grid; grid-template-columns: 26px 70px 1fr auto;
-    align-items: center; gap: 8px;
-    background: var(--card-bg); border: 1px solid var(--border);
-    border-radius: 10px; padding: 10px 12px; margin-bottom: 7px; font-size: 13px;
+  /* ---- ZONE BOUTONS (discrète, en bas) ---- */
+  .tile-actions {
+    display: flex;
+    border-top: 2px solid #1e1e1e;
+    transition: border-color 0.3s;
   }
-  .h-badge { font-size: 15px; text-align: center; }
-  .h-site  { font-weight: 700; color: var(--text); }
-  .h-on    { color: var(--armed); }
-  .h-off   { color: var(--disarmed); }
-  .h-time  { color: var(--muted); font-size: 11px; text-align: right; }
-  .no-history { color: var(--muted); font-size: 13px; text-align: center; padding: 12px; }
 
-  /* CONTROLS */
-  .controls { max-width: 500px; margin: 0 auto 0; }
-  .section-title { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
-  .controls select {
-    width: 100%; padding: 13px 16px;
-    border-radius: 12px; background-color: var(--card-bg);
-    border: 1px solid var(--border); color: var(--text);
-    font-family: 'Mulish', sans-serif; font-size: 15px; font-weight: 700;
-    margin-bottom: 12px; outline: none; cursor: pointer; appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23555' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
-    background-repeat: no-repeat; background-position: right 16px center;
+  .tile-actions button {
+    flex: 1;
+    padding: 13px 8px;
+    border: none;
+    background: transparent;
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    color: #333;
+    transition: background 0.2s, color 0.2s;
   }
-  .btn-group { display: flex; flex-direction: column; gap: 10px; }
-  .btn {
-    padding: 17px; border-radius: 13px; border: none;
-    font-family: 'Syne', sans-serif; font-size: 16px;
-    font-weight: 800; letter-spacing: 2px; cursor: pointer;
-    transition: all 0.2s ease; text-transform: uppercase;
+
+  .tile-actions button:first-child {
+    border-right: 2px solid #1e1e1e;
+    transition: border-color 0.3s, background 0.2s, color 0.2s;
   }
-  .btn:active   { transform: scale(0.98); }
-  .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-  .btn-arm      { background: var(--armed); color: #000; box-shadow: 0 4px 24px rgba(0,230,118,0.3); }
-  .btn-arm:hover:not(:disabled) { box-shadow: 0 4px 40px rgba(0,230,118,0.5); }
-  .btn-disarm   { background: transparent; color: var(--disarmed); border: 2px solid var(--disarmed); }
-  .btn-disarm:hover:not(:disabled) { background: var(--disarmed-bg); }
+
+  .tile-actions button:hover { background: rgba(255,255,255,0.05); color: #fff; }
+  .tile-actions button:active { transform: scale(0.97); }
+
+  /* ============ ÉTATS ============ */
+
+  /* ACTIVÉE → vert dominant */
+  .tile[data-state="on"] {
+    border-color: #00c853;
+    background: #00c853;
+  }
+  .tile[data-state="on"] .tile-status {
+    background: #003318;
+  }
+  .tile[data-state="on"] .tile-label { color: #00e676; font-size: clamp(20px, 5.5vw, 28px); }
+  .tile[data-state="on"] .tile-time  { color: #1a5c33; }
+  .tile[data-state="on"] .tile-actions { border-top-color: #005724; }
+  .tile[data-state="on"] .tile-actions button:first-child { border-right-color: #005724; }
+  .tile[data-state="on"] .btn-activate { color: #00e676; }
+  .tile[data-state="on"] .btn-deactivate { color: #1a5c33; }
+
+  /* NON ACTIVÉE → rouge dominant */
+  .tile[data-state="off"] {
+    border-color: #d50000;
+    background: #d50000;
+  }
+  .tile[data-state="off"] .tile-status {
+    background: #330000;
+  }
+  .tile[data-state="off"] .tile-label { color: #ff1744; font-size: clamp(14px, 4vw, 18px); }
+  .tile[data-state="off"] .tile-time  { color: #5c1a1a; }
+  .tile[data-state="off"] .tile-actions { border-top-color: #5c0000; }
+  .tile[data-state="off"] .tile-actions button:first-child { border-right-color: #5c0000; }
+  .tile[data-state="off"] .btn-activate   { color: #5c1a1a; }
+  .tile[data-state="off"] .btn-deactivate { color: #ff1744; }
+
+  /* INCONNU */
+  .tile[data-state="unknown"] .tile-label { color: #333; }
+
+  /* ============ ACTUALISER ============ */
+  .refresh-wrap {
+    width: 100%;
+    max-width: 520px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  #btnRefresh {
+    width: 100%;
+    padding: 15px;
+    border-radius: 14px;
+    border: 2px solid #222;
+    background: #161616;
+    color: #444;
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  #btnRefresh:hover    { border-color: #448aff; color: #448aff; background: rgba(68,138,255,0.06); }
+  #btnRefresh:active   { transform: scale(0.98); }
+  #btnRefresh:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  #refreshTime { font-size: 11px; color: #2a2a2a; letter-spacing: 1px; }
 </style>
 </head>
 <body>
 
-<div class="header">
-  <h1>🔒 Surveillance Alarme</h1>
-  <p>Siège &nbsp;·&nbsp; IFP / Centre Forma Pro</p>
-</div>
+<h1>Surveillance Alarme</h1>
 
-<!-- BOUTON DE VÉRIFICATION -->
-<div class="check-wrap">
-  <button id="btnCheck" onclick="checkStatus()">🔍 Vérifier le statut maintenant</button>
-  <div class="last-check" id="lastCheck"></div>
-</div>
+<div class="grid">
 
-<!-- RÉSULTATS (cachés jusqu'au clic) -->
-<div id="statusSection">
-
-  <div class="global-badge" id="globalStatus">
-    <div id="globalLabel">—</div>
-    <div id="globalSub"></div>
-  </div>
-
-  <div class="sites-grid">
-    <div class="site-card unknown" id="card-siege">
-      <span class="site-icon" id="icon-siege">❓</span>
-      <div class="site-name">Siège</div>
-      <div class="site-status" id="status-siege">—</div>
-      <span class="site-time" id="time-siege">—</span>
+  <!-- SIÈGE -->
+  <div class="tile" id="tile-siege" data-state="unknown">
+    <div class="tile-status">
+      <div class="tile-emoji">🏢</div>
+      <div class="tile-site">Siège</div>
+      <div class="tile-label" id="lbl-siege">?</div>
+      <div class="tile-time"  id="time-siege"></div>
     </div>
-    <div class="site-card unknown" id="card-ifp">
-      <span class="site-icon" id="icon-ifp">❓</span>
-      <div class="site-name">IFP</div>
-      <div class="site-status" id="status-ifp">—</div>
-      <span class="site-time" id="time-ifp">—</span>
+    <div class="tile-actions">
+      <button class="btn-activate"   onclick="setStatus('siege','armed')">✔ Activée</button>
+      <button class="btn-deactivate" onclick="setStatus('siege','disarmed')">✘ Non activée</button>
     </div>
   </div>
 
-  <div class="history-section">
-    <div class="history-title">Historique récent</div>
-    <div id="historyList"><div class="no-history">—</div></div>
+  <!-- IFP -->
+  <div class="tile" id="tile-ifp" data-state="unknown">
+    <div class="tile-status">
+      <div class="tile-emoji">🏫</div>
+      <div class="tile-site">IFP</div>
+      <div class="tile-label" id="lbl-ifp">?</div>
+      <div class="tile-time"  id="time-ifp"></div>
+    </div>
+    <div class="tile-actions">
+      <button class="btn-activate"   onclick="setStatus('ifp','armed')">✔ Activée</button>
+      <button class="btn-deactivate" onclick="setStatus('ifp','disarmed')">✘ Non activée</button>
+    </div>
   </div>
 
 </div>
 
-<hr class="divider">
-
-<!-- ENREGISTRER SON STATUT -->
-<div class="controls">
-  <div class="section-title">Mettre à jour mon site</div>
-  <select id="siteSelect">
-    <option value="Siège">🏢 Siège</option>
-    <option value="IFP">🏫 IFP / Centre Forma Pro</option>
-  </select>
-  <div class="btn-group">
-    <button class="btn btn-arm"    id="btnArm"    onclick="setStatus('armed')">🔒 Alarme Activée</button>
-    <button class="btn btn-disarm" id="btnDisarm" onclick="setStatus('disarmed')">🔓 Alarme Non Activée</button>
-  </div>
+<div class="refresh-wrap">
+  <button id="btnRefresh" onclick="refresh()">🔄  Actualiser le statut</button>
+  <span id="refreshTime"></span>
 </div>
+
+<script>
+  // Mettre à jour le texte du label selon l'état
+  const observer = new MutationObserver(() => {
+    ['siege','ifp'].forEach(k => {
+      const tile  = document.getElementById('tile-' + k);
+      const label = document.getElementById('lbl-'  + k);
+      const state = tile.getAttribute('data-state');
+      if (state === 'on')      label.textContent = 'ACTIVÉE';
+      else if (state === 'off') label.textContent = 'NON ACTIVÉE';
+      else                      label.textContent = '?';
+    });
+  });
+  ['siege','ifp'].forEach(k =>
+    observer.observe(document.getElementById('tile-' + k), { attributes: true })
+  );
+</script>
 
 </body>
 </html>
