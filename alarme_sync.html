@@ -266,25 +266,8 @@
   .refresh-info .refresh-label { display:block; font-size:10px; color:#333; text-transform:uppercase; letter-spacing:2px; }
   .refresh-info #refreshTime   { display:block; font-size:clamp(10px,1.8vw,13px); color:#555; letter-spacing:1px; }
 
-  @keyframes jaw-talk {
-    0%,100% { transform: rotate(0deg);   }
-    40%      { transform: rotate(25deg);  }
-    60%      { transform: rotate(20deg);  }
-  }
-  @keyframes jaw-idle {
-    0%,100% { transform: rotate(0deg); }
-    50%      { transform: rotate(5deg); }
-  }
-  .jaw {
-    animation: jaw-idle 2.5s ease-in-out infinite;
-    transform-box: fill-box;
-    transform-origin: center top;
-  }
-  .guard.talking .jaw {
-    animation: jaw-talk 0.2s ease-in-out infinite;
-    transform-box: fill-box;
-    transform-origin: center top;
-  }
+  @keyframes jaw-talk { 0%,100% { transform: translateY(0px); } 40% { transform: translateY(20px); } 60% { transform: translateY(15px); } }
+  @keyframes jaw-idle { 0%,100% { transform: translateY(0px); } 50% { transform: translateY(5px); } }
 </style>
 </head>
 <body>
@@ -462,4 +445,3 @@
 </div>
 </body>
 </html>
-
