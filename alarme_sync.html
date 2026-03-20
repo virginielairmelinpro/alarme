@@ -10,7 +10,7 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getDatabase, ref, set, get, push } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-   //⚠️ REMPLACEZ CES VALEURS PAR VOTRE CONFIGURATION FIREBASE
+ //⚠️ REMPLACEZ CES VALEURS PAR VOTRE CONFIGURATION FIREBASE
   const firebaseConfig = {
    apiKey: "AIzaSyCx0zhCEiZUrD5v0D_o4TdbXhfxB1kszPI",
   authDomain: "activation-alarme-441e8.firebaseapp.com",
@@ -521,5 +521,38 @@
   </div>
 
 </div>
+
+  <!-- BOUTON DEBUG JAW -->
+  <div style="position:fixed; bottom:10px; right:10px; z-index:9999;">
+    <button onclick="testJaw()" style="padding:12px; background:red; color:white; font-size:14px; border:none; border-radius:8px; cursor:pointer;">
+      TEST BOUCHE
+    </button>
+    <div id="dbg" style="background:yellow; color:black; font-size:11px; padding:4px; margin-top:4px;"></div>
+  </div>
+  <script>
+  function testJaw() {
+    var jaws = document.querySelectorAll('g.jaw');
+    var dbg = document.getElementById('dbg');
+    dbg.textContent = 'g.jaw trouvés: ' + jaws.length;
+    if (jaws.length === 0) {
+      // essayer autrement
+      jaws = document.querySelectorAll('.jaw');
+      dbg.textContent += ' | .jaw: ' + jaws.length;
+    }
+    var pos = 0, dir = -1, count = 0;
+    var iv = setInterval(function() {
+      pos += dir * 25;
+      if (pos <= -200) { pos = -200; dir = 1; }
+      if (pos >= 0)    { pos = 0;    dir = -1; }
+      count++;
+      for (var i = 0; i < jaws.length; i++) {
+        jaws[i].setAttribute('transform', 'translate(0,' + pos + ')');
+        jaws[i].style.transform = 'translateY(' + pos + 'px)';
+      }
+      dbg.textContent = 'tick:' + count + ' pos:' + pos + ' jaws:' + jaws.length;
+      if (count > 60) clearInterval(iv);
+    }, 30);
+  }
+  </script>
 </body>
 </html>
