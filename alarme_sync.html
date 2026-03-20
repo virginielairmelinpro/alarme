@@ -216,6 +216,9 @@
     animation: patrol 7s linear infinite;
     overflow: visible;
   }
+  .guard svg {
+    animation: bounce 0.22s ease-in-out infinite;
+  }
 
   @keyframes patrol {
     0%   { left: 4%;  transform: scaleX(1);  }
@@ -224,17 +227,35 @@
     97%  { left: 4%;  transform: scaleX(-1); }
     100% { left: 4%;  transform: scaleX(1);  }
   }
+  /* Rebond South Park */
+  @keyframes bounce {
+    0%,100% { transform: translateY(0px);   }
+    25%      { transform: translateY(-12px); }
+    75%      { transform: translateY(-4px);  }
+  }
 
   /* Jambes */
-  @keyframes leg-l { 0%,100%{transform:rotate(-20deg)} 50%{transform:rotate(20deg)} }
-  @keyframes leg-r { 0%,100%{transform:rotate(20deg)}  50%{transform:rotate(-20deg)} }
-  @keyframes arm-l { 0%,100%{transform:rotate(16deg)}  50%{transform:rotate(-16deg)} }
-  @keyframes arm-r { 0%,100%{transform:rotate(-16deg)} 50%{transform:rotate(16deg)}  }
+  @keyframes leg-l { 
+    0%,100%{transform:rotate(-35deg)} 
+    50%{transform:rotate(35deg)} 
+  }
+  @keyframes leg-r { 
+    0%,100%{transform:rotate(35deg)}  
+    50%{transform:rotate(-35deg)} 
+  }
+  @keyframes arm-l { 
+    0%,100%{transform:rotate(55deg)}  
+    50%{transform:rotate(-55deg)} 
+  }
+  @keyframes arm-r { 
+    0%,100%{transform:rotate(-55deg)} 
+    50%{transform:rotate(55deg)}  
+  }
 
-  .g-leg-l { transform-origin: 11px 0; animation: leg-l 0.45s ease-in-out infinite; }
-  .g-leg-r { transform-origin: 11px 0; animation: leg-r 0.45s ease-in-out infinite; }
-  .g-arm-l { transform-origin: 8px 2px; animation: arm-l 0.45s ease-in-out infinite; }
-  .g-arm-r { transform-origin: 8px 2px; animation: arm-r 0.45s ease-in-out infinite; }
+  .g-leg-l { transform-origin: 11px 0; animation: leg-l 0.22s ease-in-out infinite; }
+  .g-leg-r { transform-origin: 11px 0; animation: leg-r 0.22s ease-in-out infinite; }
+  .g-arm-l { transform-origin: 8px 2px; animation: arm-l 0.22s ease-in-out infinite; }
+  .g-arm-r { transform-origin: 8px 2px; animation: arm-r 0.22s ease-in-out infinite; }
 
   /* BOUTONS */
   .tile-actions {
