@@ -92,13 +92,13 @@
         function startJaw() {
           if (jawInterval) clearInterval(jawInterval);
           jawInterval = setInterval(() => {
-            jawPos += jawDir * 3;
-            if (jawPos >= 20) jawDir = -1;
+            jawPos += jawDir * 6;
+            if (jawPos >= 55) jawDir = -1;
             if (jawPos <= 0)  { jawDir = 1; jawPos = 0; }
             document.querySelectorAll('.jaw').forEach(el => {
               el.setAttribute('transform', 'translate(0,' + jawPos + ')');
             });
-          }, 25);
+          }, 18);
         }
 
         function stopJaw() {
