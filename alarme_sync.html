@@ -10,7 +10,7 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getDatabase, ref, set, get, push } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-   //⚠️ REMPLACEZ CES VALEURS PAR VOTRE CONFIGURATION FIREBASE
+    //⚠️ REMPLACEZ CES VALEURS PAR VOTRE CONFIGURATION FIREBASE
   const firebaseConfig = {
    apiKey: "AIzaSyCx0zhCEiZUrD5v0D_o4TdbXhfxB1kszPI",
   authDomain: "activation-alarme-441e8.firebaseapp.com",
@@ -266,8 +266,25 @@
   .refresh-info .refresh-label { display:block; font-size:10px; color:#333; text-transform:uppercase; letter-spacing:2px; }
   .refresh-info #refreshTime   { display:block; font-size:clamp(10px,1.8vw,13px); color:#555; letter-spacing:1px; }
 
-  @keyframes jaw-talk { 0%,100% { transform: translateY(0px); } 40% { transform: translateY(20px); } 60% { transform: translateY(15px); } }
-  @keyframes jaw-idle { 0%,100% { transform: translateY(0px); } 50% { transform: translateY(5px); } }
+   40% { transform: translateY(20px); } 60% { transform: translateY(15px); } }
+   50% { transform: translateY(5px); } }
+
+  @keyframes jaw-open {
+    0%   { transform: translateY(0px);  }
+    50%  { transform: translateY(20px); }
+    100% { transform: translateY(0px);  }
+  }
+  @keyframes jaw-breathe {
+    0%   { transform: translateY(0px); }
+    50%  { transform: translateY(4px);  }
+    100% { transform: translateY(0px); }
+  }
+  .jaw {
+    animation: jaw-breathe 2.5s ease-in-out infinite;
+  }
+  .guard.talking .jaw {
+    animation: jaw-open 0.25s ease-in-out infinite;
+  }
 </style>
 </head>
 <body>
