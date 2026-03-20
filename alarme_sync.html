@@ -10,7 +10,7 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getDatabase, ref, set, get, push } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
- //⚠️ REMPLACEZ CES VALEURS PAR VOTRE CONFIGURATION FIREBASE
+  //⚠️ REMPLACEZ CES VALEURS PAR VOTRE CONFIGURATION FIREBASE
   const firebaseConfig = {
    apiKey: "AIzaSyCx0zhCEiZUrD5v0D_o4TdbXhfxB1kszPI",
   authDomain: "activation-alarme-441e8.firebaseapp.com",
@@ -90,31 +90,40 @@
         const SPEED = 25;
 
         function startJaw() {
-          if (jawInterval) clearInterval(jawInterval);
+          if (jawInterval) return;
           jawInterval = setInterval(() => {
             jawPos += jawDir * SPEED;
             if (jawPos <= MAX_OPEN) { jawPos = MAX_OPEN; jawDir = 1; }
             if (jawPos >= 0)        { jawPos = 0;        jawDir = -1; }
-            document.querySelectorAll('.jaw').forEach(el => {
-              el.style.transform = 'translateY(' + jawPos + 'px)';
+            document.querySelectorAll('.jaw').forEach(function(el) {
+              el.setAttribute('transform', 'translate(0,' + jawPos + ')');
             });
-          }, 16);
+          }, 30);
         }
 
         function stopJaw() {
-          if (jawInterval) clearInterval(jawInterval);
-          jawInterval = null;
-          document.querySelectorAll('.jaw').forEach(el => {
-            el.style.transform = 'translateY(0px)';
+          if (jawInterval) { clearInterval(jawInterval); jawInterval = null; }
+          jawPos = 0; jawDir = -1;
+          document.querySelectorAll('.jaw').forEach(function(el) {
+            el.setAttribute('transform', 'translate(0,0)');
           });
         }
 
-        audio.addEventListener('playing', startJaw);
         audio.addEventListener('ended', stopJaw);
-        audio.play().catch(e => console.log('Audio:', e));
+        audio.addEventListener('error', stopJaw);
+
+        // Démarrer l'animation IMMÉDIATEMENT, sans attendre 'playing'
+        const playPromise = audio.play();
+        startJaw(); // démarrer tout de suite
+        if (playPromise) {
+          playPromise.catch(function(e) {
+            console.log('Audio error:', e);
+            stopJaw();
+          });
+        }
       }
 
-    } catch(e) { alert('Erreur lors de l\'enregistrement.'); }
+    } catch(e) { alert('Erreur Firebase: ' + e); }
     tile.style.opacity = '1';
   };
 </script>
